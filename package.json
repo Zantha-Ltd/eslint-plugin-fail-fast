@@ -1,0 +1,30 @@
+{
+  "name": "@zantha/eslint-plugin-fail-fast",
+  "version": "0.1.0",
+  "description": "ESLint rules enforcing fail-fast error handling — flags silent catch swallows, unused err bindings, console-only error surfacing.",
+  "keywords": ["eslint", "eslintplugin", "eslint-plugin", "fail-fast", "zantha"],
+  "main": "lib/index.js",
+  "type": "commonjs",
+  "files": ["lib"],
+  "scripts": {
+    "test": "node --test 'test/**/*.test.js'"
+  },
+  "peerDependencies": {
+    "eslint": ">=8"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zantha-Ltd/eslint-plugin-fail-fast.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "license": "UNLICENSED",
+  "private": false
+}
