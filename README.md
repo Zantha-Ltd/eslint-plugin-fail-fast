@@ -1,4 +1,4 @@
-# @zantha/eslint-plugin-fail-fast
+# @zantha-ltd/eslint-plugin-fail-fast
 
 ESLint rules that enforce the fail-fast error-handling principle: **every error must be visible to the user**. Never swallow, mask, or silently convert to null / empty / false.
 
@@ -7,18 +7,18 @@ Codifies the anti-pattern catalogue from the `fail-fast-coding` skill on zantha-
 ## Install
 
 ```bash
-npm i -D @zantha/eslint-plugin-fail-fast
+npm i -D @zantha-ltd/eslint-plugin-fail-fast
 ```
 
-(Published to GitHub Packages — add `@zantha:registry=https://npm.pkg.github.com` to your `.npmrc`.)
+(Published to GitHub Packages — add `@zantha-ltd:registry=https://npm.pkg.github.com` to your `.npmrc`.)
 
 ## Usage — legacy config (`.eslintrc.json`)
 
 ```json
 {
-  "plugins": ["@zantha/fail-fast"],
+  "plugins": ["@zantha-ltd/fail-fast"],
   "rules": {
-    "@zantha/fail-fast/no-swallowing-catch": "error"
+    "@zantha-ltd/fail-fast/no-swallowing-catch": "error"
   }
 }
 ```
@@ -27,7 +27,7 @@ Or pull in the recommended preset:
 
 ```json
 {
-  "extends": ["plugin:@zantha/fail-fast/recommended"]
+  "extends": ["plugin:@zantha-ltd/fail-fast/recommended"]
 }
 ```
 
@@ -47,7 +47,7 @@ Flags `catch` clauses that silently swallow the error. Four sub-cases:
 Legitimate escape hatch — use an inline disable with a justification:
 
 ```js
-// eslint-disable-next-line @zantha/fail-fast/no-swallowing-catch -- ENOENT means file absent, expected
+// eslint-disable-next-line @zantha-ltd/fail-fast/no-swallowing-catch -- ENOENT means file absent, expected
 try { readFileSync(path) } catch { return null }
 ```
 

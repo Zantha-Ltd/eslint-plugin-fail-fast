@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://npm.pkg.github.com
-          scope: '@zantha'
+          scope: '@zantha-ltd'
       - run: npm ci
       - run: npm test
       - run: npm publish
