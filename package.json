@@ -7,7 +7,7 @@
   "type": "commonjs",
   "files": ["lib"],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   },
   "peerDependencies": {
     "eslint": ">=8"
