@@ -1,7 +1,7 @@
 {
   "name": "@zantha-ltd/eslint-plugin-fail-fast",
-  "version": "0.3.1",
-  "description": "ESLint rules enforcing fail-fast error handling — flags silent catch swallows, unused err bindings, console-only error surfacing, and error-to-null/empty conversions.",
+  "version": "0.4.0",
+  "description": "ESLint rules enforcing fail-fast error handling — flags silent catch swallows, unused err bindings, console-only error surfacing, error-to-null/empty conversions, and context-stripping re-throws.",
   "keywords": ["eslint", "eslintplugin", "eslint-plugin", "fail-fast", "zantha"],
   "main": "lib/index.js",
   "type": "commonjs",

@@ -19,7 +19,8 @@ npm i -D @zantha-ltd/eslint-plugin-fail-fast
   "plugins": ["@zantha-ltd/fail-fast"],
   "rules": {
     "@zantha-ltd/fail-fast/no-swallowing-catch": "error",
-    "@zantha-ltd/fail-fast/no-error-to-null": "error"
+    "@zantha-ltd/fail-fast/no-error-to-null": "error",
+    "@zantha-ltd/fail-fast/no-context-stripping": "error"
   }
 }
 ```
@@ -92,11 +93,38 @@ try { readFileSync(path) } catch { return null }
 
 Intentional drops can also use `_` / `_err` as the parameter name (matches ESLint's `caughtErrorsIgnorePattern: '^_'` convention).
 
+### `no-context-stripping`
+
+Flags `throw new Error(...)` (or any `*Error` constructor) inside a `catch (err)` block whose arguments don't reference `err`. Losing the original error erases the stack trace and message — callers get a wrapper error with no pointer to the real failure.
+
+| Pattern | Fix |
+|---|---|
+| `catch (err) { throw new Error('Failed') }` | interpolate: `` throw new Error(`Failed: ${err.message}`) `` |
+| `catch (err) { throw new Error('Failed', { meta: true }) }` | options without `cause`: add `{ cause: err }` |
+| `catch (err) { throw new TypeError('Bad input') }` | custom subclasses follow the same contract |
+
+Allowed forms:
+
+```js
+// Bare rethrow — preserves everything natively
+catch (err) { throw err }
+
+// Interpolated message — err in the user-visible string
+catch (err) { throw new Error(`Failed to deploy: ${err instanceof Error ? err.message : err}`) }
+
+// ES2022 cause — err chained via the standard options
+catch (err) { throw new Error('Failed to deploy', { cause: err }) }
+```
+
+If you alias `err` into a local (`const msg = err.message; throw new Error(msg)`), the rule still fires because the static check can't follow the reference — inline the template literal or switch to `{ cause: err }`.
+
+Intentional drops: use `_` / `_err` as the catch parameter name to tell the rule the caught error is deliberately unused.
+
 ## Planned rules
 
-- `no-context-stripping` — flags `catch (err) { throw new Error('foo') }` where the new Error doesn't chain `err` via message or `{ cause }`.
 - `no-generic-api-error` — flags API catch blocks that return `{ error: 'Server error' }` without including `err.message`.
 - `require-res-ok-check` — flags `await fetch(...)` whose result reaches `.json()` / `.text()` without a `res.ok` guard.
+- `no-error-masking` — flags `setError('Something went wrong')` in a catch that ignores the caught err (needs a convention list of surface-function names).
 
 ## Development
 
