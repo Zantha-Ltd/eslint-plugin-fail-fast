@@ -4,6 +4,18 @@ ESLint rules that enforce the fail-fast error-handling principle: **every error 
 
 Codifies the anti-pattern catalogue from the `fail-fast-coding` skill on zantha-roles so violations surface at dev / CI time rather than in production.
 
+## Rules at a glance
+
+| Rule | Catches |
+|---|---|
+| [`no-swallowing-catch`](#no-swallowing-catch) | empty catches, unused err, console-only surfacing |
+| [`no-error-to-null`](#no-error-to-null) | `catch { return null }` / `.catch(() => [])` silent degradations |
+| [`no-context-stripping`](#no-context-stripping) | `throw new Error('Failed')` that drops err's stack / message |
+| [`no-generic-api-error`](#no-generic-api-error) | 5xx responses with literal error strings (Next.js + Fastify) |
+| [`require-res-ok-check`](#require-res-ok-check) | `res.json()` without checking `res.ok` / `.status` |
+| [`no-error-masking`](#no-error-masking) | `setError('Something went wrong')` in a catch that doesn't use err |
+| [`no-if-res-ok-no-else`](#no-if-res-ok-no-else) | `if (res.ok) { … }` with no else — non-OK case silently ignored |
+
 ## Install
 
 ```bash
@@ -22,7 +34,9 @@ npm i -D @zantha-ltd/eslint-plugin-fail-fast
     "@zantha-ltd/fail-fast/no-error-to-null": "error",
     "@zantha-ltd/fail-fast/no-context-stripping": "error",
     "@zantha-ltd/fail-fast/no-generic-api-error": "error",
-    "@zantha-ltd/fail-fast/require-res-ok-check": "error"
+    "@zantha-ltd/fail-fast/require-res-ok-check": "error",
+    "@zantha-ltd/fail-fast/no-error-masking": "error",
+    "@zantha-ltd/fail-fast/no-if-res-ok-no-else": "error"
   }
 }
 ```
@@ -120,16 +134,24 @@ catch (err) { throw new Error('Failed to deploy', { cause: err }) }
 
 If you alias `err` into a local (`const msg = err.message; throw new Error(msg)`), the rule still fires because the static check can't follow the reference — inline the template literal or switch to `{ cause: err }`.
 
-Intentional drops: use `_` / `_err` as the catch parameter name to tell the rule the caught error is deliberately unused.
-
 ### `no-generic-api-error`
 
-Flags `NextResponse.json(body, { status: N })` / `Response.json(...)` / `new NextResponse(...)` inside a `catch (err)` where `N ≥ 500` (numeric literal) and `body.error` (or `body.message`) is a value that doesn't reference `err`. Also follows `const <id> = <expr with err>; ... { error: <id> }` — aliasing into a local that references err is allowed.
+Flags API error responses whose body is an object with a literal error string that doesn't reference the caught err. Covers both Next.js and Fastify idioms:
+
+- `NextResponse.json(body, { status: N })`
+- `Response.json(body, { status: N })`
+- `new NextResponse(body, { status: N })`
+- `reply.code(N).send(body)` / `reply.status(N).send(body)` (Fastify — chained form only)
+
+Only fires when `N ≥ 500` as a numeric literal. 4xx responses are deliberately out of scope — usually intentional client errors.
+
+Follows aliases through `const <id> = <expr with err>` declarations, template literals, `+` concatenation, ternaries, and object-property values — so `{ error: `Failed to X: ${msg}` }` passes when `msg` is err-derived.
 
 | Pattern | Fix |
 |---|---|
 | `return NextResponse.json({ error: 'Server error' }, { status: 500 })` | interpolate: `{ error: err instanceof Error ? err.message : 'Unknown error' }` |
-| `return Response.json({ message: 'Internal' }, { status: 502 })` | same — message key is also flagged |
+| `return Response.json({ message: 'Internal' }, { status: 502 })` | same — `error` / `message` / `detail` keys all flagged |
+| `reply.code(500).send({ error: 'upstream gone' })` | same — Fastify form |
 
 Allowed forms:
 
@@ -142,13 +164,14 @@ catch (err) {
   )
 }
 
-// Local var aliased from err — rule follows the declaration
+// Local var aliased from err — rule follows the declaration, including
+// through templates / concat prefixes
 catch (err) {
   const message = err instanceof Error ? err.message : 'Unknown error'
-  return NextResponse.json({ error: message }, { status: 500 })
+  return NextResponse.json({ error: `Failed to save: ${message}` }, { status: 500 })
 }
 
-// Discriminator: 4xx responses are out of scope; 5xx surfaces err
+// Discriminator: 4xx responses are out of scope
 catch (err) {
   if (err instanceof ValidationError) {
     return NextResponse.json({ error: 'Missing field: sku' }, { status: 400 })
@@ -157,16 +180,25 @@ catch (err) {
 }
 ```
 
-Rule scope is deliberately narrow: 4xx responses are allowed to carry literal strings (they're usually intentional client errors), and opaque body expressions (non-object-literal, or status as a variable) are skipped to keep false positives low.
+Rule scope is deliberately narrow: opaque body expressions (non-object-literal, e.g. `buildErrorBody(err)`) and non-literal status codes are skipped to keep false positives low.
 
 ### `require-res-ok-check`
 
-Flags `res.json()` / `res.text()` / `res.blob()` / `res.arrayBuffer()` / `res.formData()` calls on a fetch result when neither `res.ok` nor `res.status` (nor `.statusText` / `.headers`) is referenced anywhere in the enclosing scope. A non-2xx response silently gets its error body parsed as if it were success, or throws a cryptic `SyntaxError` on HTML error pages.
+Flags `res.json()` / `res.text()` / `res.blob()` / `res.arrayBuffer()` / `res.formData()` calls on a fetch result when no `res.ok` / `res.status` / `res.statusText` / `res.headers` access exists in the enclosing scope. A non-2xx response silently gets its error body parsed as if it were success, or throws a cryptic `SyntaxError` on HTML error pages.
+
+Three forms covered:
+
+| Shape | Example |
+|---|---|
+| Assigned variable | `const res = await fetch(url); res.json()` |
+| Parenthesised await | `(await fetch(url)).json()` |
+| Promise chain | `fetch(url).then(r => r.json())` |
 
 | Pattern | Fix |
 |---|---|
 | `const res = await fetch(...); const data = await res.json()` | add `if (!res.ok) throw new Error(...)` before the parse |
-| `const res = await fetch(...); return await res.text()` | same |
+| `fetch(url).then(r => r.json())` | `fetch(url).then(r => { if (!r.ok) throw …; return r.json() })` |
+| `(await fetch(url)).json()` | bind to a variable, guard it, then parse |
 
 Allowed forms:
 
@@ -186,15 +218,79 @@ const res = await fetch('/api/items')
 const contentType = res.headers.get('content-type') || ''
 if (!contentType.includes('application/json')) throw new Error('not json')
 return await res.json()
+
+// Promise chain with in-callback guard
+return fetch(url).then(r => {
+  if (!r.ok) throw new Error(`Failed: ${r.status}`)
+  return r.json()
+})
 ```
 
-Scope (v1): only `const/let/var X = await fetch(...)` form. Chained `fetch(url).then(r => r.json())` and parenthesised `(await fetch(url)).json()` are out of scope for now.
+### `no-error-masking`
 
-## Planned rules
+Flags calls that look like error-surface functions (setError, toast.error, setMessage, showWarning, etc.) inside a `catch (err)` whose first argument doesn't surface the caught err. The anti-pattern: the developer console.logs err but shows the user a generic "Something went wrong" — user has no idea what actually broke.
 
-- `no-error-masking` — flags `setError('Something went wrong')` in a catch that ignores the caught err (needs a convention list of surface-function names).
-- `no-fastify-generic-error` — extend `no-generic-api-error` to cover `reply.code(500).send({ error: 'X' })`.
-- `require-res-ok-check` (promise form) — extend to `fetch(url).then(r => r.json())` chained patterns.
+| Pattern | Fix |
+|---|---|
+| `catch (err) { console.error(err); setError('Something went wrong') }` | `setError(err instanceof Error ? err.message : 'Something went wrong')` |
+| `catch (err) { toast.error('Save failed') }` | `` toast.error(`Save failed: ${err.message}`) `` |
+| `catch (err) { setMessage({ type: 'error', text: 'Internal error' }) }` | `setMessage({ type: 'error', text: err.message })` |
+
+Surface-function detection is name-pattern-based and scoped to avoid false positives:
+
+- Identifier callees matching `/^(set|show|display|report|notify|flash)[A-Z]/` AND containing an error-like word (`error|warning|message|failure|fault|fail|alert|issue|notice|problem`). So `setError` / `setMessage` / `setSaveMessage` / `showWarning` / `reportFailure` match; `setState` / `setUser` / `setLoading` don't.
+- Standalone `toastError`, `flashMessage` etc.
+- `alert(…)` browser builtin.
+- MemberExpression `<obj>.error` / `.warn` / `.warning` / `.fail` / `.failure` (e.g. `toast.error`, `notify.warn`). `console.error` is excluded — `no-swallowing-catch` owns that.
+
+Allowed forms:
+
+```js
+// Direct err reference
+catch (err) { setError(err.message) }
+
+// Ternary with fallback
+catch (err) { setError(err instanceof Error ? err.message : 'Failed') }
+
+// Template literal interpolation
+catch (err) { toast.error(`Save failed: ${err.message}`) }
+
+// Object carrying err-derived text
+catch (err) { setMessage({ type: 'error', text: err.message }) }
+
+// Local alias the rule follows
+catch (err) {
+  const msg = err instanceof Error ? err.message : 'Unknown'
+  setError(msg)
+}
+```
+
+### `no-if-res-ok-no-else`
+
+Flags `if (<var>.ok) { … }` statements with no else branch. The consequent handles the success path; without an else the non-OK response silently falls through.
+
+| Pattern | Fix |
+|---|---|
+| `if (res.ok) { setItems(await res.json()) }` | add an else that throws, or flip to guard-first |
+| `if (res.ok) return res.json()` | same — implicit return undefined on !ok |
+
+Allowed forms:
+
+```js
+// Idiomatic: guard-first, then success path falls through
+if (!res.ok) throw new Error(`Failed: ${res.status}`)
+const data = await res.json()
+
+// Explicit else
+if (res.ok) {
+  const data = await res.json()
+  setItems(data)
+} else {
+  throw new Error(`Failed: ${res.status}`)
+}
+```
+
+Scope (v1): only positive tests `if (<ident>.ok)` on a simple MemberExpression. Negated form (`if (!res.ok) throw …`) is the idiomatic guard and is not flagged. Compound tests (`if (res.ok && …)`) and call-result tests (`if (getRes().ok)`) are out of scope.
 
 ## Development
 
