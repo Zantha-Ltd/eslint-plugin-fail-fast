@@ -21,7 +21,8 @@ npm i -D @zantha-ltd/eslint-plugin-fail-fast
     "@zantha-ltd/fail-fast/no-swallowing-catch": "error",
     "@zantha-ltd/fail-fast/no-error-to-null": "error",
     "@zantha-ltd/fail-fast/no-context-stripping": "error",
-    "@zantha-ltd/fail-fast/no-generic-api-error": "error"
+    "@zantha-ltd/fail-fast/no-generic-api-error": "error",
+    "@zantha-ltd/fail-fast/require-res-ok-check": "error"
   }
 }
 ```
@@ -158,11 +159,42 @@ catch (err) {
 
 Rule scope is deliberately narrow: 4xx responses are allowed to carry literal strings (they're usually intentional client errors), and opaque body expressions (non-object-literal, or status as a variable) are skipped to keep false positives low.
 
+### `require-res-ok-check`
+
+Flags `res.json()` / `res.text()` / `res.blob()` / `res.arrayBuffer()` / `res.formData()` calls on a fetch result when neither `res.ok` nor `res.status` (nor `.statusText` / `.headers`) is referenced anywhere in the enclosing scope. A non-2xx response silently gets its error body parsed as if it were success, or throws a cryptic `SyntaxError` on HTML error pages.
+
+| Pattern | Fix |
+|---|---|
+| `const res = await fetch(...); const data = await res.json()` | add `if (!res.ok) throw new Error(...)` before the parse |
+| `const res = await fetch(...); return await res.text()` | same |
+
+Allowed forms:
+
+```js
+// Standard ok guard
+const res = await fetch('/api/items')
+if (!res.ok) throw new Error(`Failed: ${res.status}`)
+const data = await res.json()
+
+// Manual status check — .status reference is enough
+const res = await fetch('/api/items')
+if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+return await res.json()
+
+// Content-type branch — .headers reference is enough
+const res = await fetch('/api/items')
+const contentType = res.headers.get('content-type') || ''
+if (!contentType.includes('application/json')) throw new Error('not json')
+return await res.json()
+```
+
+Scope (v1): only `const/let/var X = await fetch(...)` form. Chained `fetch(url).then(r => r.json())` and parenthesised `(await fetch(url)).json()` are out of scope for now.
+
 ## Planned rules
 
-- `require-res-ok-check` — flags `await fetch(...)` whose result reaches `.json()` / `.text()` without a `res.ok` guard.
 - `no-error-masking` — flags `setError('Something went wrong')` in a catch that ignores the caught err (needs a convention list of surface-function names).
 - `no-fastify-generic-error` — extend `no-generic-api-error` to cover `reply.code(500).send({ error: 'X' })`.
+- `require-res-ok-check` (promise form) — extend to `fetch(url).then(r => r.json())` chained patterns.
 
 ## Development
 
