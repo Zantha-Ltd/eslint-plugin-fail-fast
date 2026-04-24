@@ -128,6 +128,37 @@ test('no-generic-api-error', () => {
         `,
       },
       {
+        name: 'Fastify reply.code(500).send with err.message',
+        code: `
+          function f(_request, reply) {
+            try { risky() } catch (err) {
+              return reply.code(500).send({ error: err instanceof Error ? err.message : 'Unknown' })
+            }
+          }
+        `,
+      },
+      {
+        name: 'Fastify reply.status(503).send with err-derived local',
+        code: `
+          function f(_request, reply) {
+            try { risky() } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown'
+              return reply.status(503).send({ error: \`upstream failed: \${msg}\` })
+            }
+          }
+        `,
+      },
+      {
+        name: 'Fastify client error (400) — out of scope',
+        code: `
+          function f(_request, reply) {
+            try { risky() } catch (err) {
+              return reply.code(400).send({ error: 'bad request' })
+            }
+          }
+        `,
+      },
+      {
         name: 'underscore-prefixed param — intentional ignore',
         code: `
           function f() {
@@ -221,6 +252,28 @@ test('no-generic-api-error', () => {
           }
         `,
         errors: [{ messageId: 'genericError' }],
+      },
+      {
+        name: 'Fastify reply.code(500).send generic literal',
+        code: `
+          function f(_request, reply) {
+            try { risky() } catch (err) {
+              return reply.code(500).send({ error: 'internal error' })
+            }
+          }
+        `,
+        errors: [{ messageId: 'genericError', data: { status: 500, key: 'error', errName: 'err' } }],
+      },
+      {
+        name: 'Fastify reply.status(502).send generic literal',
+        code: `
+          function f(_request, reply) {
+            try { risky() } catch (err) {
+              reply.status(502).send({ error: 'upstream gone' })
+            }
+          }
+        `,
+        errors: [{ messageId: 'genericError', data: { status: 502, key: 'error', errName: 'err' } }],
       },
     ],
   })

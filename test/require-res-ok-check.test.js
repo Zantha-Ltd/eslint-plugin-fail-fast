@@ -86,6 +86,44 @@ test('require-res-ok-check', () => {
           }
         `,
       },
+      {
+        name: 'promise chain with ok guard in arrow body',
+        code: `
+          async function f() {
+            return fetch('/x').then(r => {
+              if (!r.ok) throw new Error('fail')
+              return r.json()
+            })
+          }
+        `,
+      },
+      {
+        name: 'promise chain with status guard',
+        code: `
+          async function f() {
+            return fetch('/x').then(r => {
+              if (r.status >= 400) throw new Error('bad')
+              return r.text()
+            })
+          }
+        `,
+      },
+      {
+        name: 'promise chain with underscore param — intentional ignore',
+        code: `
+          async function f() {
+            return fetch('/x').then(_r => somethingElse())
+          }
+        `,
+      },
+      {
+        name: 'non-fetch .then chain is ignored',
+        code: `
+          async function f() {
+            return someOther('/x').then(r => r.json())
+          }
+        `,
+      },
     ],
 
     invalid: [
@@ -98,7 +136,7 @@ test('require-res-ok-check', () => {
             return data
           }
         `,
-        errors: [{ messageId: 'noResOkCheck', data: { name: 'res', method: 'json' } }],
+        errors: [{ messageId: 'noResOkCheckVar', data: { name: 'res', method: 'json' } }],
       },
       {
         name: 'unguarded: res.text()',
@@ -108,7 +146,7 @@ test('require-res-ok-check', () => {
             return await res.text()
           }
         `,
-        errors: [{ messageId: 'noResOkCheck', data: { name: 'res', method: 'text' } }],
+        errors: [{ messageId: 'noResOkCheckVar', data: { name: 'res', method: 'text' } }],
       },
       {
         name: 'unguarded: res.blob()',
@@ -119,7 +157,7 @@ test('require-res-ok-check', () => {
             return blob
           }
         `,
-        errors: [{ messageId: 'noResOkCheck', data: { name: 'r', method: 'blob' } }],
+        errors: [{ messageId: 'noResOkCheckVar', data: { name: 'r', method: 'blob' } }],
       },
       {
         name: 'unguarded even with a console log (logging is not a check)',
@@ -130,7 +168,7 @@ test('require-res-ok-check', () => {
             return await res.json()
           }
         `,
-        errors: [{ messageId: 'noResOkCheck' }],
+        errors: [{ messageId: 'noResOkCheckVar' }],
       },
       {
         name: 'unguarded: multiple parses both fire',
@@ -143,8 +181,8 @@ test('require-res-ok-check', () => {
           }
         `,
         errors: [
-          { messageId: 'noResOkCheck', data: { name: 'res', method: 'json' } },
-          { messageId: 'noResOkCheck', data: { name: 'res', method: 'text' } },
+          { messageId: 'noResOkCheckVar', data: { name: 'res', method: 'json' } },
+          { messageId: 'noResOkCheckVar', data: { name: 'res', method: 'text' } },
         ],
       },
       {
@@ -155,7 +193,7 @@ test('require-res-ok-check', () => {
             return await res.json()
           }
         `,
-        errors: [{ messageId: 'noResOkCheck' }],
+        errors: [{ messageId: 'noResOkCheckVar' }],
       },
       {
         name: 'unguarded: arrayBuffer parse',
@@ -165,7 +203,58 @@ test('require-res-ok-check', () => {
             return await res.arrayBuffer()
           }
         `,
-        errors: [{ messageId: 'noResOkCheck', data: { name: 'res', method: 'arrayBuffer' } }],
+        errors: [{ messageId: 'noResOkCheckVar', data: { name: 'res', method: 'arrayBuffer' } }],
+      },
+      {
+        name: 'promise chain: fetch(url).then(r => r.json())',
+        code: `
+          async function f() {
+            return fetch('/x').then(r => r.json())
+          }
+        `,
+        errors: [{ messageId: 'noResOkCheckThen', data: { method: 'json' } }],
+      },
+      {
+        name: 'promise chain block body without guard',
+        code: `
+          async function f() {
+            return fetch('/x').then(r => {
+              return r.text()
+            })
+          }
+        `,
+        errors: [{ messageId: 'noResOkCheckThen', data: { method: 'text' } }],
+      },
+      {
+        name: 'promise chain with console log only (not a check)',
+        code: `
+          async function f() {
+            return fetch('/x').then(r => {
+              console.log('got response')
+              return r.json()
+            })
+          }
+        `,
+        errors: [{ messageId: 'noResOkCheckThen', data: { method: 'json' } }],
+      },
+      {
+        name: 'parenthesised await fetch().json()',
+        code: `
+          async function f() {
+            const data = await (await fetch('/x')).json()
+            return data
+          }
+        `,
+        errors: [{ messageId: 'noResOkCheckAwaitChain', data: { method: 'json' } }],
+      },
+      {
+        name: 'parenthesised await fetch().text()',
+        code: `
+          async function f() {
+            return await (await fetch('/x')).text()
+          }
+        `,
+        errors: [{ messageId: 'noResOkCheckAwaitChain', data: { method: 'text' } }],
       },
     ],
   })
