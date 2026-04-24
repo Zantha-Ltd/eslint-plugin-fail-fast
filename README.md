@@ -20,7 +20,8 @@ npm i -D @zantha-ltd/eslint-plugin-fail-fast
   "rules": {
     "@zantha-ltd/fail-fast/no-swallowing-catch": "error",
     "@zantha-ltd/fail-fast/no-error-to-null": "error",
-    "@zantha-ltd/fail-fast/no-context-stripping": "error"
+    "@zantha-ltd/fail-fast/no-context-stripping": "error",
+    "@zantha-ltd/fail-fast/no-generic-api-error": "error"
   }
 }
 ```
@@ -120,11 +121,48 @@ If you alias `err` into a local (`const msg = err.message; throw new Error(msg)`
 
 Intentional drops: use `_` / `_err` as the catch parameter name to tell the rule the caught error is deliberately unused.
 
+### `no-generic-api-error`
+
+Flags `NextResponse.json(body, { status: N })` / `Response.json(...)` / `new NextResponse(...)` inside a `catch (err)` where `N ≥ 500` (numeric literal) and `body.error` (or `body.message`) is a value that doesn't reference `err`. Also follows `const <id> = <expr with err>; ... { error: <id> }` — aliasing into a local that references err is allowed.
+
+| Pattern | Fix |
+|---|---|
+| `return NextResponse.json({ error: 'Server error' }, { status: 500 })` | interpolate: `{ error: err instanceof Error ? err.message : 'Unknown error' }` |
+| `return Response.json({ message: 'Internal' }, { status: 502 })` | same — message key is also flagged |
+
+Allowed forms:
+
+```js
+// Direct err.message interpolation
+catch (err) {
+  return NextResponse.json(
+    { error: err instanceof Error ? err.message : 'Unknown error' },
+    { status: 500 }
+  )
+}
+
+// Local var aliased from err — rule follows the declaration
+catch (err) {
+  const message = err instanceof Error ? err.message : 'Unknown error'
+  return NextResponse.json({ error: message }, { status: 500 })
+}
+
+// Discriminator: 4xx responses are out of scope; 5xx surfaces err
+catch (err) {
+  if (err instanceof ValidationError) {
+    return NextResponse.json({ error: 'Missing field: sku' }, { status: 400 })
+  }
+  return NextResponse.json({ error: err.message }, { status: 500 })
+}
+```
+
+Rule scope is deliberately narrow: 4xx responses are allowed to carry literal strings (they're usually intentional client errors), and opaque body expressions (non-object-literal, or status as a variable) are skipped to keep false positives low.
+
 ## Planned rules
 
-- `no-generic-api-error` — flags API catch blocks that return `{ error: 'Server error' }` without including `err.message`.
 - `require-res-ok-check` — flags `await fetch(...)` whose result reaches `.json()` / `.text()` without a `res.ok` guard.
 - `no-error-masking` — flags `setError('Something went wrong')` in a catch that ignores the caught err (needs a convention list of surface-function names).
+- `no-fastify-generic-error` — extend `no-generic-api-error` to cover `reply.code(500).send({ error: 'X' })`.
 
 ## Development
 
