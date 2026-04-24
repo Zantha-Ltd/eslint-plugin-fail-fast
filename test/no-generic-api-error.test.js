@@ -106,6 +106,28 @@ test('no-generic-api-error', () => {
         `,
       },
       {
+        name: 'err-derived alias wrapped in a template literal prefix',
+        code: `
+          function f() {
+            try { risky() } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown'
+              return NextResponse.json({ error: \`Failed to X: \${msg}\` }, { status: 500 })
+            }
+          }
+        `,
+      },
+      {
+        name: 'err-derived alias concatenated with a prefix',
+        code: `
+          function f() {
+            try { risky() } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown'
+              return NextResponse.json({ error: 'Failed: ' + msg }, { status: 500 })
+            }
+          }
+        `,
+      },
+      {
         name: 'underscore-prefixed param — intentional ignore',
         code: `
           function f() {
