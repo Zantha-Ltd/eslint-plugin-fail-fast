@@ -119,6 +119,17 @@ test('no-error-to-null — catch clause', () => {
           }
         `,
       },
+      {
+        name: 'err captured in nested setState arrow counts as surfacing',
+        code: `
+          function f() {
+            try { risky() } catch (err) {
+              setState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'failed' }))
+              return
+            }
+          }
+        `,
+      },
     ],
 
     invalid: [
