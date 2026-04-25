@@ -60,6 +60,37 @@ export default [
 ]
 ```
 
+## Repo CI gate setup
+
+Installing the plugin and enabling it in ESLint config makes violations show up in `npm run lint`. To make those violations *block PR merges* — the wall the rules are designed to be — three more pieces are required:
+
+1. **Caller workflow** (`.github/workflows/fail-fast.yml`) that calls the org reusable workflow `Zantha-Ltd/.github/.github/workflows/fail-fast-lint.yml@main`. Template + inputs in [Zantha-Ltd/.github/docs/onboard-repo.md §2e](https://github.com/Zantha-Ltd/.github/blob/main/docs/onboard-repo.md).
+2. **Org ruleset entry** — add the repo to `conditions.repository_name.include` in `Zantha-Ltd/.github/rulesets/fail-fast-required.json`, then run `./rulesets/apply-all.sh`. This requires the `lint / fail-fast-lint` status check on `main`, admin-bypass only. See onboard-repo.md §2g.
+3. **Repo merge settings — `allow_auto_merge` and `delete_branch_on_merge`** (see below). Without these the gate technically works but PRs sit unmerged, stale branches accumulate, and main diverges from in-flight work. This is the step most often forgotten.
+
+### Auto-merge — turn it on
+
+GitHub repos default to `allow_auto_merge: false`. With that flag off, `gh pr merge <N> --auto` silently does nothing: a passing lint check produces no automatic outcome, every PR needs a manual click. Stuck PRs accumulate, main moves forward via the PRs that *do* get clicked, and the stuck ones drift into merge conflicts.
+
+```bash
+# Check current state
+gh api repos/Zantha-Ltd/<repo> --jq '{allow_auto_merge, delete_branch_on_merge}'
+
+# Flip both (one-time per repo)
+gh api -X PATCH repos/Zantha-Ltd/<repo> \
+  -f allow_auto_merge=true \
+  -f delete_branch_on_merge=true
+```
+
+Why both:
+
+- `allow_auto_merge: true` enables `gh pr merge <N> --auto --merge`. With the fail-fast ruleset on, the PR merges automatically the moment `lint / fail-fast-lint` goes green — no human in the loop.
+- `delete_branch_on_merge: true` retires merged feature branches automatically. Without it, stale `feat/*` / `refactor/*` branches accumulate on origin.
+
+For the repo author's day-to-day flow that uses these settings, see `content/workflows/git-deploy.md` in `Zantha-Ltd/zantha-mcp` — the canonical "ship code via PR + auto-merge" workflow.
+
+---
+
 ## Rules
 
 ### `no-swallowing-catch`
