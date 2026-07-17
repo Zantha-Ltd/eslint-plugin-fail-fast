@@ -15,6 +15,7 @@ Codifies the anti-pattern catalogue from the `fail-fast-coding` skill on zantha-
 | [`require-res-ok-check`](#require-res-ok-check) | `res.json()` without checking `res.ok` / `.status` |
 | [`no-error-masking`](#no-error-masking) | `setError('Something went wrong')` in a catch that doesn't use err |
 | [`no-if-res-ok-no-else`](#no-if-res-ok-no-else) | `if (res.ok) { … }` with no else — non-OK case silently ignored |
+| [`require-envelope-check`](#require-envelope-check) | unchecked body-level failure envelopes (`Success: false` in a 200) — config-driven |
 
 ## Install
 
@@ -36,7 +37,12 @@ npm i -D @zantha-ltd/eslint-plugin-fail-fast
     "@zantha-ltd/fail-fast/no-generic-api-error": "error",
     "@zantha-ltd/fail-fast/require-res-ok-check": "error",
     "@zantha-ltd/fail-fast/no-error-masking": "error",
-    "@zantha-ltd/fail-fast/no-if-res-ok-no-else": "error"
+    "@zantha-ltd/fail-fast/no-if-res-ok-no-else": "error",
+    "@zantha-ltd/fail-fast/require-envelope-check": ["error", {
+      "envelopes": [
+        { "callee": "mintsoftRequest", "property": "Success", "guards": ["assertBodySuccess"] }
+      ]
+    }]
   }
 }
 ```
@@ -322,6 +328,41 @@ if (res.ok) {
 ```
 
 Scope (v1): only positive tests `if (<ident>.ok)` on a simple MemberExpression. Negated form (`if (!res.ok) throw …`) is the idiomatic guard and is not flagged. Compound tests (`if (res.ok && …)`) and call-result tests (`if (getRes().ok)`) are out of scope.
+
+### `require-envelope-check`
+
+Some APIs signal operation failure in the response **body** of an HTTP 200 — an "envelope" contract (Mintsoft's `Success: false` + `Message`, Shopify GraphQL's `userErrors[]`). Transport-level handling (`res.ok`, try/catch) cannot see these: the refusal arrives as ordinary data and gets persisted as if the operation succeeded. This class is invisible to every syntactic rule above — there is no catch block or fallback to flag — so this rule is **config-driven**: register your envelope-bearing client functions and their discriminator property, and every call site must interrogate the result.
+
+```json
+"@zantha-ltd/fail-fast/require-envelope-check": ["error", {
+  "envelopes": [
+    { "callee": "mintsoftRequest", "property": "Success", "guards": ["assertBodySuccess"] }
+  ]
+}]
+```
+
+| Pattern | Fix |
+|---|---|
+| `const r = await mintsoftRequest(url)` with `r.Success` never read | check `.Success`, or pass `r` to a registered guard |
+| `return await mintsoftRequest(url)` (thin wrapper raw-return) | check in the wrapper — raw returns push the obligation onto every caller |
+| `await mintsoftRequest(url)` (result discarded) | bind and check — a refusal would vanish without a trace |
+| `const { ProductId } = await mintsoftRequest(url)` | destructure the discriminator too |
+
+Allowed forms:
+
+```js
+const r = await mintsoftRequest(url)
+if (r.Success === false) throw new Error(r.Message)
+
+return assertBodySuccess(await mintsoftRequest(url), 'context')   // registered guard
+
+const { Success, ID } = await mintsoftRequest(url)                 // discriminator extracted
+if (!Success) throw new Error('refused')
+```
+
+**The stronger alternative:** enforce the envelope centrally inside the client function itself (throw on `Success: false`, with an explicit opt-out param for call sites that consume a refusal as data) and do **not** register that callee here — a runtime guard that cannot be forgotten beats a lint rule that must be configured. Use this rule for clients you can't centralise, and for keeping the contract enforced in repos that share the client by copy.
+
+Scope (v1): bare-identifier callees only (`mintsoftRequest(...)`, not `client.request(...)`); assigned-variable, destructuring, direct-return, arrow-shorthand, and discarded-statement forms. Promise-chain (`callee().then(...)`) is out of scope. Without rule options the rule is inert, so it ships in `recommended` at `error` severity harmlessly.
 
 ## Development
 
