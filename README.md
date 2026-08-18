@@ -16,6 +16,7 @@ Codifies the anti-pattern catalogue from the `fail-fast-coding` skill on zantha-
 | [`no-error-masking`](#no-error-masking) | `setError('Something went wrong')` in a catch that doesn't use err |
 | [`no-if-res-ok-no-else`](#no-if-res-ok-no-else) | `if (res.ok) { … }` with no else — non-OK case silently ignored |
 | [`require-envelope-check`](#require-envelope-check) | unchecked body-level failure envelopes (`Success: false` in a 200) — config-driven |
+| [`require-waiver-classification`](#require-waiver-classification) | fail-fast waivers that reassure instead of classifying — **opt-in, off by default** |
 
 ## Install
 
@@ -363,6 +364,37 @@ if (!Success) throw new Error('refused')
 **The stronger alternative:** enforce the envelope centrally inside the client function itself (throw on `Success: false`, with an explicit opt-out param for call sites that consume a refusal as data) and do **not** register that callee here — a runtime guard that cannot be forgotten beats a lint rule that must be configured. Use this rule for clients you can't centralise, and for keeping the contract enforced in repos that share the client by copy.
 
 Scope (v1): bare-identifier callees only (`mintsoftRequest(...)`, not `client.request(...)`); assigned-variable, destructuring, direct-return, arrow-shorthand, and discarded-statement forms. Promise-chain (`callee().then(...)`) is out of scope. Without rule options the rule is inert, so it ships in `recommended` at `error` severity harmlessly.
+
+### `require-waiver-classification`
+
+**Opt-in. Not in `recommended` or `flat/recommended`** — enable it per repo:
+
+```json
+"@zantha-ltd/fail-fast/require-waiver-classification": "error"
+```
+
+Every rule above can be waived with an inline `eslint-disable` comment. That waiver is the one chink in the armour, and defensive code re-accumulates through it one reasonable-sounding justification at a time. This rule requires a waiver to **classify** the swallow it permits rather than reassure the reader about it:
+
+| class | meaning |
+|---|---|
+| **(a) not a failure** | a platform fact or expected branch — `localStorage` in private mode, an absent optional file. Nothing went wrong. |
+| **(b) recoverable transient** | **name the condition** — "SSE stream close", `ECONNRESET`, attempts 1..N-1 of a retry that rethrows on the last. |
+| **(c) bounded degradation** | the failure is real and nothing recovers, but the justification names **both** the blast radius and the channel the error still surfaces on. |
+
+```js
+// eslint-disable-next-line @zantha-ltd/fail-fast/no-swallowing-catch -- (a) /proc is absent off Linux
+// eslint-disable-next-line @zantha-ltd/fail-fast/no-error-to-null -- (c) a failed footer query must not 500 the page; error is console-logged for ops; footer degrades to empty
+```
+
+Loud death was never the goal — the **pressure to fix** is. (c) is legitimate exactly when that pressure moves to another channel instead of being abolished. A swallow naming no radius and no channel does not tolerate a failure, it erases it.
+
+**What this rule does NOT do, stated because the gap is the point.** It checks that a claim was made; it cannot check the claim is true. Whether a (c) justification names a *real* radius and a *real* channel is a human review question. Its value is forcing the author to commit to a category — a different act from writing something that sounds prudent, and reviewable in a way that prose alone is not.
+
+**Why it does not match on "resilience" vocabulary.** The obvious implementation is a blocklist rejecting "must not abort", "keep running", "non-fatal". That was designed and rejected: the phrase is not the test. The `fail-fast` skill's own canonical best-effort example is commented *"must not block the response"*, and the published Hydrogen deferred-data waiver reads *"a failed footer query must not 500 the page"*. A blocklist fires on both — the code we publish as the right answer — while missing any author who avoids the words. False positives on good code and false negatives on bad is strictly worse than no rule, because a gate that flags correct code teaches contributors the enforcement is wrong.
+
+**Known gap:** a blanket `/* eslint-disable */` with no rule list carries no rule names to match on and passes silently. Different problem, different fix (`eslint-comments/no-unlimited-disable`); not papered over here.
+
+**Counting is a separate mechanism.** Waiver-count creep is covered fleet-wide by the ratchet step in `Zantha-Ltd/.github` `fail-fast-lint.yml`, which counts waivers against a committed baseline. That counts; this classifies. Neither substitutes for the other.
 
 ## Development
 
