@@ -1,11 +1,19 @@
 {
   "name": "@zantha-ltd/eslint-plugin-fail-fast",
-  "version": "1.1.0",
-  "description": "ESLint rules enforcing fail-fast error handling — eight rules covering silent catch swallows, error-to-null conversions, context-stripping re-throws, generic 5xx API responses (Next.js + Fastify), unguarded response parses, error-surface masking, no-else if-res-ok gates, and unchecked body-level failure envelopes (config-driven).",
-  "keywords": ["eslint", "eslintplugin", "eslint-plugin", "fail-fast", "zantha"],
+  "version": "1.2.0",
+  "description": "ESLint rules enforcing fail-fast error handling \u2014 nine rules covering silent catch swallows, error-to-null conversions, context-stripping re-throws, generic 5xx API responses (Next.js + Fastify), unguarded response parses, error-surface masking, no-else if-res-ok gates, unchecked body-level failure envelopes (config-driven), and unclassified fail-fast waivers (opt-in).",
+  "keywords": [
+    "eslint",
+    "eslintplugin",
+    "eslint-plugin",
+    "fail-fast",
+    "zantha"
+  ],
   "main": "lib/index.js",
   "type": "commonjs",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "test": "node --test test/*.test.js"
   },
