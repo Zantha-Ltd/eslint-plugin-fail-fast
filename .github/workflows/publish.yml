@@ -31,8 +31,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Public npm registry, so installs need no token (kanban #1857). The package's
-  # publishConfig points at GitHub Packages, so it is removed in this checkout only.
+  # Public npm registry via npm trusted publishing (OIDC): no stored token
+  # (kanban #1857). Trusted publishing needs npm 11.5.1 or later, and the
+  # package's publishConfig points at GitHub Packages, so it is removed in this
+  # checkout only.
   publish-npmjs:
     runs-on: ubuntu-latest
     permissions:
@@ -44,10 +46,8 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          scope: '@zantha-ltd'
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm test
       - run: npm pkg delete publishConfig
-      - run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
