@@ -3,9 +3,17 @@ name: Publish
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Registry to publish the current version to'
+        type: choice
+        options: [npmjs]
+        default: npmjs
 
 jobs:
   publish:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,3 +30,24 @@ jobs:
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Public npm registry, so installs need no token (kanban #1857). The package's
+  # publishConfig points at GitHub Packages, so it is removed in this checkout only.
+  publish-npmjs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          scope: '@zantha-ltd'
+      - run: npm ci
+      - run: npm test
+      - run: npm pkg delete publishConfig
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
