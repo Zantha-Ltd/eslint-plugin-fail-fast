@@ -102,7 +102,7 @@ For the repo author's day-to-day flow that uses these settings, see `content/wor
 
 ### `no-swallowing-catch`
 
-Flags `catch` clauses that silently swallow the error. Four sub-cases:
+Flags `catch` clauses that silently swallow the error. Five sub-cases:
 
 | Pattern | Message |
 |---|---|
@@ -110,6 +110,7 @@ Flags `catch` clauses that silently swallow the error. Four sub-cases:
 | `try { … } catch (err) { }` | empty body |
 | `try { … } catch (err) { doOther() }` | err never referenced |
 | `try { … } catch (err) { console.error(err) }` | err only logged to console, never surfaced |
+| `try { … } catch (err) { console.error(err); failed++; continue }` | err logged, then dropped: the only statements after the log bump a counter, set a flag on a local or `this`, or exit with `continue`, `break`, a bare `return` or `return null`/`undefined` (2.0.0) |
 
 ### `no-error-to-null`
 
