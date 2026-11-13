@@ -5,3 +5,6 @@ node_modules/
 .env.*.local
 coverage/
 dist/
+
+# Per-box JIT state the session hooks materialise (estate mandate, zantha-mcp #3370)
+.claude/.jit/
